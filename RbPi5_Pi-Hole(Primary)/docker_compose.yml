@@ -1,0 +1,61 @@
+version: "3"
+services:
+  pihole:
+    container_name: pihole
+    image: pihole/pihole:latest
+    hostname: rbpi5-pi-hole
+    networks:
+     # Macvlan IP → LAN clients will use this for DNS
+     ph_network:
+       ipv4_address: 10.1.0.16
+     # Bridge IP → Host (this node) must use this for DNS resolution (Docker pulls, apt, etc.)
+     ph_bridge:
+       ipv4_address: 10.2.0.26
+    environment:
+      TZ: 'Asia/Kolkata'
+      WEBPASSWORD: 'It@llends73'
+      DNSMASQ_LISTENING: local
+      # Point Pi-hole upstream DNS to Unbound (running at 10.1.0.27 on macvlan)
+      PIHOLE_DNS_: '10.1.0.27#53'
+    volumes:
+      - '/opt/docker_files/pihole/data/pi-hole/pihole:/etc/pihole'
+      - '/opt/docker_files/pihole/data/pi-hole/dnsmasq.d:/etc/dnsmasq.d'
+      - '/opt/docker_files/pihole/data/pi-hole/external.conf:/etc/lighttpd/external.conf:ro'
+    restart: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+
+  unbound:
+    container_name: unbound
+    image: "mvance/unbound-rpi:latest"
+    hostname: rbpi5-unbound
+    networks: 
+    # Only needs macvlan, LAN + Pi-hole can reach it
+     ph_network:
+       ipv4_address: 10.1.0.27
+    volumes:
+      - '/opt/docker_files/pihole/data/unbound:/opt/unbound/etc/unbound/'
+    restart: unless-stopped
+
+networks:
+    ph_bridge:
+      name: ph_bridge
+      driver: bridge
+      ipam:
+        config:
+          - subnet: 10.2.0.0/16
+            gateway: 10.2.0.15
+            ip_range: 10.2.0.0/16
+    ph_network:
+      name: ph_network
+      driver: macvlan
+      driver_opts:
+        parent: eth0
+      ipam:
+        config:
+          - subnet: 10.1.0.0/16
+            ip_range: 10.1.1.0/24
+            gateway: 10.1.0.15
+
+
